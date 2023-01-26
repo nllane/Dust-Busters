@@ -5,6 +5,7 @@ import cv2 as cv
 import time
 from time import sleep
 from picamera import PiCamera
+import smbus
 
     # Lidar
 from math import cos, sin, pi, floor
@@ -12,6 +13,8 @@ import os
 import pygame
 ##from adafruit_rplidar import RPLidar
 from rplidar import RPLidar
+
+address = 0x09
 
 #set up of the camara's conection to the pi
 ##
@@ -32,6 +35,10 @@ pygame.mouse.set_visible(False)
 lcd.fill((0,0,0))
 pygame.display.update()
 
+bus = smbus.SMBus(1)
+time.sleep(0.1)
+
+
 # Setup the RPLidar
 PORT_NAME = '/dev/ttyUSB0'
 lidar = RPLidar('/dev/ttyUSB0')
@@ -40,9 +47,17 @@ lidar.stop()
 # used to scale data to fit on the screen
 max_distance = 0
 
+
+def writeNumber():
+    bus.write_byte_data(address,0,9)
+    print('1')
+# bus.write_byte_data(address, 0, value)
+    return -1
+
 #pylint: disable=redefined-outer-name,global-statement
 def process_data(data):
     global max_distance
+    global send
     lcd.fill((0,0,0))
     for angle in range(360):
         distance = data[angle]
@@ -55,6 +70,7 @@ def process_data(data):
             y = distance * sin(radians)
             point = (160 + int(x / max_distance * 119), 120 + int(y / max_distance * 119))
             lcd.set_at(point, pygame.Color(255, 255, 255))
+    writeNumber()
     pygame.display.update()
 
 

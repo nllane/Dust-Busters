@@ -1,10 +1,10 @@
+#include <Wire.h>
+int in=0;
+int first=1;
 
 void setup() {
   // put your setup code here, to run once:
   #define TIME 2000
-  #include <Wire.h>
-  int in=0;
-  int first=1;
   #define SLAVE_ADDRESS 0x09
   Serial.begin(19200);
   // put your setup code here, to run once:

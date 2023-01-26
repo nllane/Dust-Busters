@@ -1,6 +1,20 @@
+
 void setup() {
   // put your setup code here, to run once:
   #define TIME 2000
+  #include <Wire.h>
+int in=0;
+int first=1;
+#define SLAVE_ADDRESS 0x09
+    Serial.begin(19200);
+  // put your setup code here, to run once:
+ Wire.begin(SLAVE_ADDRESS);
+  // define callbacks for i2c communication
+  Wire.onReceive(receiveData);
+
+
+    
+}
 }
 
 void loop() {
@@ -54,3 +68,8 @@ void loop() {
   }
 
 }
+void receiveData(int byteCount) {
+while (Wire.available()) {
+    in = Wire.read();
+    in = Wire.read();
+}}

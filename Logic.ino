@@ -3,18 +3,14 @@ void setup() {
   // put your setup code here, to run once:
   #define TIME 2000
   #include <Wire.h>
-int in=0;
-int first=1;
-#define SLAVE_ADDRESS 0x09
-    Serial.begin(19200);
+  int in=0;
+  int first=1;
+  #define SLAVE_ADDRESS 0x09
+  Serial.begin(19200);
   // put your setup code here, to run once:
- Wire.begin(SLAVE_ADDRESS);
+  Wire.begin(SLAVE_ADDRESS);
   // define callbacks for i2c communication
   Wire.onReceive(receiveData);
-
-
-    
-}
 }
 
 void loop() {
@@ -22,10 +18,6 @@ void loop() {
   //which would allow us to create a "map" inside the RPi and avoid using tape on the floor
   //the LiDAR would scan the room and "update" the map based on what it sees, and it would know where
   //the robot is at based on the gyro readings and where the "home base" is at
-  
-  //--------------------------------------------
-  // read in the data from I2C communication here
-  //--------------------------------------------
   
   // "in" is the bit read from RPi. LiDAR logic:
   // 0 is no obstacle detected (or it's far away)
@@ -70,6 +62,7 @@ void loop() {
 }
 void receiveData(int byteCount) {
 while (Wire.available()) {
+    // read twice because it is sending an extra 0 between data sends
     in = Wire.read();
     in = Wire.read();
 }}

@@ -1,7 +1,7 @@
     # inprots all pi camera librarys
 import math
 import numpy as np
-import cv2 as cv
+##import cv2 as cv
 import time
 from time import sleep
 from picamera import PiCamera
@@ -15,6 +15,9 @@ import pygame
 from rplidar import RPLidar
 
 address = 0x09
+left=0
+right=0
+count=0
 
 #set up of the camara's conection to the pi
 ##
@@ -29,11 +32,11 @@ address = 0x09
 ##camera.capture_sequence(['image%02d.jpg' % i for i in range(10)])
 
 os.putenv('SDL_FBDEV', '/dev/fb1')
-pygame.init()
-lcd = pygame.display.set_mode((320,240))
-pygame.mouse.set_visible(False)
-lcd.fill((0,0,0))
-pygame.display.update()
+#pygame.init()
+#lcd = pygame.display.set_mode((320,240))
+#pygame.mouse.set_visible(False)
+#lcd.fill((0,0,0))
+#pygame.display.update()
 
 bus = smbus.SMBus(1)
 time.sleep(0.1)
@@ -48,30 +51,52 @@ lidar.stop()
 max_distance = 0
 
 
-def writeNumber():
-    bus.write_byte_data(address,0,9)
-    print('1')
-# bus.write_byte_data(address, 0, value)
-    return -1
+def writeNumber(left,right):
+    ##print('hi')
+    bus.write_byte_data(address,left,right)
 
 #pylint: disable=redefined-outer-name,global-statement
 def process_data(data):
     global max_distance
-    global send
-    lcd.fill((0,0,0))
+    global count
+    global right
+    global left
+    right=0
+    left=0
+    #lcd.fill((0,0,0))
     for angle in range(360):
         distance = data[angle]
         if angle > 50 and angle < 310:
             continue
-        if distance > 0:                  # ignore initially ungathered data points
-            max_distance = max([min([5000, distance]), max_distance])
-            radians = angle * pi / 180.0
-            x = distance * cos(radians)
-            y = distance * sin(radians)
-            point = (160 + int(x / max_distance * 119), 120 + int(y / max_distance * 119))
-            lcd.set_at(point, pygame.Color(255, 255, 255))
-    writeNumber()
-    pygame.display.update()
+        if (angle < 30 and distance < 1200 and distance > 0):
+            right=1
+        if (angle > 340 and distance < 1200 and distance > 0):
+            left=1
+        #if distance > 0 and distance < 600:                  # ignore initially ungathered data points
+           # max_distance = max([min([5000, distance]), max_distance])
+            #radians = angle * pi / 180.0
+            #x = distance * cos(radians)
+            #y = distance * sin(radians)
+            #point = (160 + int(x / max_distance * 119), 120 + int(y / max_distance * 119))
+            #lcd.set_at(point, pygame.Color(255, 255, 255))
+    count +=1
+
+    if count==10:
+        print('sending:')
+        if left == 1:
+            print("Left")
+        if right == 1:
+            print("Right")
+        print("------------------")
+        writeNumber(left,right)
+        count=0
+        left=0
+        right=0
+        
+        
+        
+                
+    #pygame.display.update()
 
 
 def pic():
@@ -94,7 +119,6 @@ try:
         for (_, angle, distance) in scan:
             scan_data[min([359, floor(angle)])] = distance
         process_data(scan_data)
-
 except KeyboardInterrupt:
     print('Stoping.')
 lidar.stop()

@@ -2,12 +2,15 @@
 #include "PinChangeInterrupt.h"
 #include <Wire.h>
 //Setup Pins
-#define GAIN_A 7
-#define GAIN_B 7
+#define KPA 10
+#define KPB 10
+#define KIA 0.1
+#define KIB 0.1
 //Enscoder Pins
 #define MotorAEncoder 10
 #define MotorBEncoder 11
 #define distTolerance 3
+  int room[]={0};
   int left=0;
   int right=0;
    int first=0;
@@ -17,9 +20,9 @@ volatile unsigned int EncoderCountB = 0;
 
 // Defining these allows us to use letters in place of binary when
 // controlling our motors
-// Left motor == A
+// Right motor == A
 #define A 0
-// Right motor == B
+// Left motor == B
 #define B 1
 
 #define motorAfor 2
@@ -29,15 +32,14 @@ volatile unsigned int EncoderCountB = 0;
 //Driver Pin varables
 
 // Drive constants - dependent on robot configuration
-#define EncoderCountsPerRev 2240.0
+#define EncoderCountsPerRev 1393.0
 #define DistancePerRev      31.9
-#define DegreesPerRev       28.25
+#define DegreesPerRev       100
 
 #define button 50
 // Min PWM for robot's wheels to move
-#define deadband_A 100
-#define deadband_B 100
-#define interruptPin 18
+#define deadband_A 67
+#define deadband_B 67
 void indexEncoderCountA()
 {
   EncoderCountA++;
@@ -60,13 +62,6 @@ void motor_setup() {
     digitalWrite(motorBrev, 0);
   return;
 } // end function
-void receiveData(int byteCount) {
-while (Wire.available()) {
-    // read twice because it is sending an extra 0 between data sends
-    
-    left = Wire.read();
-    
-    right = Wire.read();}}
 // int motor is the defined A or B
 // pwm = the power cycle you want to use
 void run_motor(int motor, int pwm) {
@@ -103,12 +98,7 @@ void setup() {
   motor_setup();
   // setup serial printing
   Serial.begin(9600);
-  #define SLAVE_ADDRESS 0x09
-  // put your setup code here, to run once:
-  Wire.begin(SLAVE_ADDRESS);
-  // define callbacks for i2c communication
-  Wire.onReceive(receiveData);
-
+  
   while(digitalRead(button) == 0);
   Serial.print("Start ");
 
@@ -119,128 +109,155 @@ void setup() {
 
   pinMode(MotorBEncoder, INPUT_PULLUP);
   attachPCINT(digitalPinToPCINT(MotorBEncoder), indexEncoderCountB, CHANGE);
-  //Estop interupt
-  pinMode(interruptPin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(interruptPin), Estop, LOW);
+  
 }
 
 void loop() {
-  Serial.print(left);
-  Serial.print(right);
-  if(left== 1 && right ==1 ){  
-    Serial.print("stopping");
-
-    run_motor(A, -255);
-    run_motor(B, -255);
-    delay(100);
-    // we will use this as a way to stop the robot and end a test run
-    run_motor(A, 0);
-    run_motor(B, 0);
-    
-    //turn 180
-    while(digitalRead(button) == 0);
+  for (int i=0 ;i <sizeof(room);i++ ){
+    if (room[i]==0){
+      Serial.print("turn ");
+      turn(0);
   }
-  
-  else if(left == 1){
-    Serial.print(" avoiding obstacle to left ");
-    //turn right
-    run_motor(A, 255);
-    run_motor(B, -255);
-    delay(100);
-    run_motor(A, 0);
-    run_motor(B, 0);
-    delay(500);
+  if (room[i]==1){
+    turn(1);
   }
-  else if(right == 1){
-    Serial.print("avoiding obstacle to right");
-    //turn left
-    run_motor(A, -255);
-    run_motor(B, 255);
-    delay(100);
-    run_motor(A, 0);
-    run_motor(B, 0);
-    delay(500);
-
-    // go straight for a bit
-
-    // turn right
-  }
-  
   else{
-    Serial.print("straight");
-    // go straight
-    if (first==0){
-    drive(10);
-    first=1;
-    run_motor(A, 0);
+    Serial.print("drive ");
+    drive (room[i]);
+    Serial.print("Stop ");
     run_motor(B, 0);
-    }
-    else{  
-    Serial.print("stopping");
-    // we will use this as a way to stop the robot and end a test run
     run_motor(A, 0);
-    run_motor(B, 0);
-    first=0;
-    //turn 180
-    while(digitalRead(button) == 0);
+    Serial.print(EncoderCountA);
+    Serial.print(" ");
+    Serial.print(EncoderCountB);
+    while(digitalRead(button) == 0);{
   }
-    //run_motor(A, 255);
-    //run_motor(B, 255);
-    //Serial.print(EncoderCountA);
-    //delay(1000);
-    //run_motor(A, 0);
-    //run_motor(B, 0);
-    //Serial.print(EncoderCountA);
-    //delay(1000);
   }
-  
+  while(digitalRead(button) == 0);{
+  }}
 }
-int drive(float distance)
-{
+void turn(int way){
   // create variables needed for this function
-  int countsDesired, cmdLeft, cmdRight, errorLeft, errorRight;
+  int countsDesired, cmdA, cmdB, errorA, errorB,totalErrorB,totalErrorA;
 
   // Find the number of encoder counts based on the distance given, and the 
   // configuration of your encoders and wheels
-  countsDesired = distance*(EncoderCountsPerRev/DistancePerRev)/70;
+  float distance = (90*(1/DistancePerRev)*DistancePerRev);
+  
+  countsDesired = distance*(EncoderCountsPerRev/DistancePerRev);
 
   // reset the current encoder counts
   EncoderCountA = 0;
   EncoderCountB = 0;
   
   // we make the errors greater than our tolerance so our first test gets us into the loop
-  errorLeft = distTolerance + 1;
-  errorRight =  distTolerance + 1;
+  errorA = distTolerance + 1;
+  errorB =  distTolerance + 1;
+  totalErrorA=errorA;
+  totalErrorB=errorB;
 
   // Begin PID control until move is complete
-  while (errorLeft > distTolerance || errorRight > distTolerance)
+  while (errorA > distTolerance || errorB > distTolerance)
   {
     // Get PWM values from proportionalControl function
-    cmdLeft = proportionalControl(GAIN_A, deadband_A, errorLeft);
-    cmdRight = proportionalControl(GAIN_B, deadband_B, errorRight);
+    cmdA = PIControl(KPA,KIA, deadband_A,totalErrorA, errorA,255);
+    cmdB = PIControl(KPB,KIB, deadband_B,totalErrorB, errorB,255);
 
     // Set new PWMs
-    run_motor(A, cmdLeft);
-    run_motor(B, cmdRight);
+    if (way == 1) {
+      run_motor(A, cmdA);
+      run_motor(B, -cmdB);
+    } else if (way == 0) {
+      run_motor(A, -cmdA);
+      Serial.print(cmdA);
+      Serial.print(" ");
+      Serial.print(errorA);
+      Serial.print(" A");
+      Serial.print("\n");
+      run_motor(B, cmdB);
+      Serial.print(cmdB);
+      Serial.print(" ");
+      Serial.print(errorB);
+      Serial.print(" B");
+      Serial.print("\n");
+    }
+    
+    // Update encoder error
+    // Error is the number of encoder counts between here and the destination
+    errorA = countsDesired - EncoderCountA;
+    errorB = countsDesired - EncoderCountB;
+
+//    Serial.print(errorA);
+//    Serial.print(" ");
+//    Serial.print(cmdA);
+//    Serial.print("\t");
+//    Serial.print(errorB);
+//    Serial.print(" ");
+//    Serial.println(cmdB);
+
+  }
+  
+    delay(100);
+    run_motor(A, 0);
+    run_motor(B, 0);
+}
+
+
+int drive(float distance)
+{
+  // create variables needed for this function
+  int countsDesired, cmdA, cmdB, errorA, errorB,totalErrorB,totalErrorA;
+
+  // Find the number of encoder counts based on the distance given, and the 
+  // configuration of your encoders and wheels
+  countsDesired = distance*(EncoderCountsPerRev/DistancePerRev)*1.03;
+Serial.print(countsDesired);
+  // reset the current encoder counts
+  EncoderCountA = 0;
+  EncoderCountB = 0;
+  
+  // we make the errors greater than our tolerance so our first test gets us into the loop
+  errorA = distTolerance + 1;
+  errorB =  distTolerance + 1;
+
+  totalErrorB = errorB;
+  totalErrorA = errorA;
+
+  // Begin PID control until move is complete
+  while (errorA > distTolerance || errorB > distTolerance)
+  {
+    // Get PWM values from proportionalControl function
+    cmdA = PIControl(KPA,KIA, deadband_A,totalErrorA, errorA,240);
+    cmdB = PIControl(KPB,KIB, deadband_B,totalErrorB, errorB,255);
+
+    // Set new PWMs
+    run_motor(B, cmdB);
+    delay(25);
+    run_motor(A, cmdA);
 
     // Update encoder error
     // Error is the number of encoder counts between here and the destination
-    errorLeft = countsDesired - EncoderCountA;
-    errorRight = countsDesired - EncoderCountB;
+    errorA = countsDesired - EncoderCountA-110;
+    errorB = countsDesired - EncoderCountB;
 
+    totalErrorB += errorB;
+    totalErrorA += errorA;
     // If using bump sensors, check here for collisions
     // and call correction function
 
     /* Some print statements, for debugging*/
-//    Serial.print(errorLeft);
+//    Serial.print(errorA);
 //    Serial.print(" ");
-//    Serial.print(cmdLeft);
+//    Serial.print(cmdA);
 //    Serial.print("\t");
-//    Serial.print(errorRight);
-//    Serial.print(" ");
-//    Serial.println(cmdRight);
+//    Serial.print(errorB);
+ //   Serial.print(" ");
+//    Serial.println(cmdB);
 
   }
+  //Serial.print(errorA);
+   // Serial.print(" ");
+   // Serial.print(errorB);
 }
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -257,22 +274,15 @@ int drive(float distance)
 
 
 //////////////////////////////////////////////////////////
-int proportionalControl(int gain, int deadband, int error)
+int PIControl(int KP,float KI, int deadband,int totalError, int error, int max_speed)
 //  gain, deadband, and error, both are integer values
 {
   if (error <= distTolerance) { // if error is acceptable, PWM = 0
     return (0);
   }
 
-  int pwm = (gain * error); // Proportional control
-  pwm = constrain(pwm,deadband,255); // Bind value between motor's min and max
+  int pwm = (KP * error+KI*totalError); // Proportional control
+  pwm = constrain(pwm,deadband,max_speed); // Bind value between motor's min and max
   return(pwm);
   // Consider updating to include differential control
-}
-void Estop() {
-  run_motor(A, 0);
-  run_motor(B, 0);
-  Serial.print("Estop Activated ");
-  
-  
 }

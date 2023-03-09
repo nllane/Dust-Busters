@@ -32,11 +32,11 @@ count=0
 ##camera.capture_sequence(['image%02d.jpg' % i for i in range(10)])
 
 os.putenv('SDL_FBDEV', '/dev/fb1')
-#pygame.init()
-#lcd = pygame.display.set_mode((320,240))
-#pygame.mouse.set_visible(False)
-#lcd.fill((0,0,0))
-#pygame.display.update()
+pygame.init()
+lcd = pygame.display.set_mode((320,240))
+pygame.mouse.set_visible(False)
+lcd.fill((0,0,0))
+pygame.display.update()
 
 bus = smbus.SMBus(1)
 time.sleep(0.1)
@@ -61,34 +61,42 @@ def process_data(data):
     global count
     global right
     global left
+    lcd.fill((0,0,0))
+    pygame.display.update()
     right=0
     left=0
+    sendr=0
+    sendl=0
     #lcd.fill((0,0,0))
     for angle in range(360):
         distance = data[angle]
         if angle > 50 and angle < 310:
             continue
+        if (angle > 330 and distance < 1200 and distance > 0):
+            right+=1
         if (angle < 30 and distance < 1200 and distance > 0):
-            right=1
-        if (angle > 340 and distance < 1200 and distance > 0):
-            left=1
-        #if distance > 0 and distance < 600:                  # ignore initially ungathered data points
-           # max_distance = max([min([5000, distance]), max_distance])
-            #radians = angle * pi / 180.0
-            #x = distance * cos(radians)
-            #y = distance * sin(radians)
-            #point = (160 + int(x / max_distance * 119), 120 + int(y / max_distance * 119))
-            #lcd.set_at(point, pygame.Color(255, 255, 255))
+            left+=1
+        if distance > 0 and distance < 600:                  # ignore initially ungathered data points
+            max_distance = max([min([5000, distance]), max_distance])
+            radians = angle * pi / 180.0
+            x = distance * cos(radians)
+            y = distance * sin(radians)
+            point = (160 + int(x / max_distance * 119), 120 + int(y / max_distance * 119))
+            lcd.set_at(point, pygame.Color(255, 255, 255))
     count +=1
 
-    if count==10:
+    if count==5:
         print('sending:')
-        if left == 1:
+        print(left)
+        print(right)
+        if left >= 3:
             print("Left")
-        if right == 1:
+            sendl=1
+        if right >= 3:
             print("Right")
+            sendr=1
         print("------------------")
-        writeNumber(left,right)
+        writeNumber(sendl,sendr)
         count=0
         left=0
         right=0
@@ -96,7 +104,7 @@ def process_data(data):
         
         
                 
-    #pygame.display.update()
+    pygame.display.update()
 
 
 def pic():

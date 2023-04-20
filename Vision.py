@@ -1,32 +1,20 @@
 #!/usr/bin/pyton3
 
-    # inprots all pi camera librarys
+ ##library
 import math
 import numpy as np
-##import cv2 as cv
 import time
 from time import sleep
-from picamera import PiCamera
 import smbus
 
-    # Lidar
+# Lidar
 from math import cos, sin, pi, floor
 import os
-import pygame
 ##from adafruit_rplidar import RPLidar
 from rplidar import RPLidar
 
-## i2c set location
+## i2c communication setup
 address = 0x09
-
-##pygame set up comment out
-##os.putenv('SDL_FBDEV', '/dev/fb1')
-##pygame.init()
-##lcd = pygame.display.set_mode((320,240))
-##pygame.mouse.set_visible(False)
-##lcd.fill((0,0,0))
-##pygame.display.update()
-
 bus = smbus.SMBus(1)
 time.sleep(0.1)
 
@@ -34,94 +22,92 @@ time.sleep(0.1)
 # Setup the RPLidar
 PORT_NAME = '/dev/ttyUSB0'
 lidar = RPLidar(PORT_NAME)
-print('test')
+##print('test') ## Used to debug where errors occurred
 lidar.clean_input
+## This makes sure there are no unexpected values already in the lidar
 
-# used to scale data to fit on the screen
+# set global variables
 max_distance = 0
 count=0
 
+## funtion to send the aquired vaules
+def write_number(send):
+    ## send the values to the arduino using i2c pins
+    print(send)## View what is sent for debugging
+    bus.write_i2c_block_data(address, distance_corrector, send)
 
-def writeNumber(send):
-    ##print('hi')
-    print(send)
-    bus.write_i2c_block_data(address, distance_correcter, send)
-
-#pylint: disable=redefined-outer-name,global-statement
+## function to calculate data
 def process_data(data):
+    ## global variables
     global max_distance
     global count
-    global distance_correcter
-   ## lcd.fill((0,0,0))
-   ## pygame.display.update()
+    global distance_corrector
+## setup local variables and resets them
     right=0
     left=0
     position=270
-    wall = 10000
+    wall = 10000## set to large value because it looks for the closest point
     cm=0
     send=[0,0,0,0]
-## reviews all angle measurments aquired
+ ## reviews all angle measurements acquired
     for angle in range(360):
         distance = data[angle]
 ## ignore unwanted points to reduce processing power
-        if angle > 30 and angle < 270 :
+        if angle > 30 and angle < 270 :## 120 degrees viewed
             continue
-## checks the Right side for obsticals 30 degree angles
+## checks the Right side for obstacles within 30 degree angles at up to 80 cm
         if (angle > 330 and distance < 800 and distance > 0):
             right+=1
-## checks the left side for obsticals 30 degree angles
+## checks the left side for obstacles within 30 degree angles at up to 80 cm
         if (angle < 30 and distance < 800 and distance > 0):
             left+=1
-## pi game to display room while coding
-##        if distance > 0 and distance < 600:                  # ignore initially ungathered data points
-##            max_distance = max([min([5000, distance]), max_distance])
-##            radians = angle * pi / 180.0
-##            x = distance * cos(radians)
-##            y = distance * sin(radians)
-##            point = (160 + int(x / max_distance * 119), 120 + int(y / max_distance * 119))
-##            lcd.set_at(point, pygame.Color(255, 255, 255))
+## checks the left side of the robot for the closest point
         if angle >= 270 and angle <=330:
             if distance <= wall and distance!=0:
+## adjust angle and distance sent based on shortest distance
                 wall=distance
                 position=angle
     count +=1
+## adjusts the value to be in cms
     cm=int((wall)/10)
     print("wall ",cm)
-    distance_correcter= int(cm/255)
+## Creates a value to adjust for bit size
+    distance_corrector= int(cm/255)
     print("angle ",position)
+##Sends the values every 5 scans to reduce delays to the LiDAR
     if count==5:
-## print statments to see size of obsticals relitive to pixil size
+## print statements to see size of obstacles relative to pixel size
         print('sending:')
         print(left)
         print(right)
-## remove chance of seeing non existant obsticals with a band to filter out points that were not overriden
-        if left >= 3:# 3 was found efective at removing errors without missing obsticals
-            print("Left")# print that it is avoiding an obstical
+## remove chance of seeing nonexistent obstacles by filtering out points that were not overridden
+        if left >= 3:# 3 was found effective at removing errors without missing obstacles
+            print("Left")# print that it is avoiding an obstacle
             send[0]=1
-## remove chance of seeing non existant obsticals with a band to filter out points that were not overriden
+## remove chance of seeing nonexistent obstacles by filtering out points that were not overridden
         if right >= 3:
-            print("Right")# print that it is avoiding an obstical
+            print("Right")# print that it is avoiding an obstacle
             send[1]=1
         print("------------------")
+## Adds the other values to the send matrix
         send[2]=cm
-        send[3]=position-255
-        writeNumber(send)
+        send[3]=position-255 ##adjusted to allow for one byte send limit
+        write_number(send)
         count=0
         
-        
-        
-## updates image on the screen            
-    ##pygame.display.update()
  
-#sets up a funtion that can read the arduino. used for debugging
 scan_data = [0]*360
 
+## LiDAR code found online
 try:
     for scan in lidar.iter_scans():
+## runs through the scans as they are created
         for (_, angle, distance) in scan:
             scan_data[min([359, floor(angle)])] = distance
         process_data(scan_data)
-except KeyboardInterrupt: ## stop command from computer
+## runs the processing code
+except KeyboardInterrupt:
+## stop command from computer
     print('Stoping.')
     lidar.stop()
     lidar.stop_motor()

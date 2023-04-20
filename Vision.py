@@ -1,3 +1,5 @@
+#!/usr/bin/pyton3
+
     # inprots all pi camera librarys
 import math
 import numpy as np
@@ -14,29 +16,16 @@ import pygame
 ##from adafruit_rplidar import RPLidar
 from rplidar import RPLidar
 
+## i2c set location
 address = 0x09
-left=0
-right=0
-count=0
 
-#set up of the camara's conection to the pi
-##
-##camera = PiCamera(resolution=(640, 360), framerate=30)
-##camera.iso = 100
-##sleep(2)
-##camera.shutter_speed = camera.exposure_speed
-##camera.exposure_mode = 'off'
-##g = camera.awb_gains
-##camera.awb_mode = 'off'
-##camera.awb_gains = g
-##camera.capture_sequence(['image%02d.jpg' % i for i in range(10)])
-
-os.putenv('SDL_FBDEV', '/dev/fb1')
-pygame.init()
-lcd = pygame.display.set_mode((320,240))
-pygame.mouse.set_visible(False)
-lcd.fill((0,0,0))
-pygame.display.update()
+##pygame set up comment out
+##os.putenv('SDL_FBDEV', '/dev/fb1')
+##pygame.init()
+##lcd = pygame.display.set_mode((320,240))
+##pygame.mouse.set_visible(False)
+##lcd.fill((0,0,0))
+##pygame.display.update()
 
 bus = smbus.SMBus(1)
 time.sleep(0.1)
@@ -44,81 +33,86 @@ time.sleep(0.1)
 
 # Setup the RPLidar
 PORT_NAME = '/dev/ttyUSB0'
-lidar = RPLidar('/dev/ttyUSB0')
-lidar.stop_motor()
-lidar.stop()
+lidar = RPLidar(PORT_NAME)
+print('test')
+lidar.clean_input
+
 # used to scale data to fit on the screen
 max_distance = 0
+count=0
 
 
-def writeNumber(left,right):
+def writeNumber(send):
     ##print('hi')
-    bus.write_byte_data(address,left,right)
+    print(send)
+    bus.write_i2c_block_data(address, distance_correcter, send)
 
 #pylint: disable=redefined-outer-name,global-statement
 def process_data(data):
     global max_distance
     global count
-    global right
-    global left
-    lcd.fill((0,0,0))
-    pygame.display.update()
+    global distance_correcter
+   ## lcd.fill((0,0,0))
+   ## pygame.display.update()
     right=0
     left=0
-    sendr=0
-    sendl=0
-    #lcd.fill((0,0,0))
+    position=270
+    wall = 10000
+    cm=0
+    send=[0,0,0,0]
+## reviews all angle measurments aquired
     for angle in range(360):
         distance = data[angle]
-        if angle > 50 and angle < 310:
+## ignore unwanted points to reduce processing power
+        if angle > 30 and angle < 270 :
             continue
-        if (angle > 330 and distance < 1200 and distance > 0):
+## checks the Right side for obsticals 30 degree angles
+        if (angle > 330 and distance < 800 and distance > 0):
             right+=1
-        if (angle < 30 and distance < 1200 and distance > 0):
+## checks the left side for obsticals 30 degree angles
+        if (angle < 30 and distance < 800 and distance > 0):
             left+=1
-        if distance > 0 and distance < 600:                  # ignore initially ungathered data points
-            max_distance = max([min([5000, distance]), max_distance])
-            radians = angle * pi / 180.0
-            x = distance * cos(radians)
-            y = distance * sin(radians)
-            point = (160 + int(x / max_distance * 119), 120 + int(y / max_distance * 119))
-            lcd.set_at(point, pygame.Color(255, 255, 255))
+## pi game to display room while coding
+##        if distance > 0 and distance < 600:                  # ignore initially ungathered data points
+##            max_distance = max([min([5000, distance]), max_distance])
+##            radians = angle * pi / 180.0
+##            x = distance * cos(radians)
+##            y = distance * sin(radians)
+##            point = (160 + int(x / max_distance * 119), 120 + int(y / max_distance * 119))
+##            lcd.set_at(point, pygame.Color(255, 255, 255))
+        if angle >= 270 and angle <=330:
+            if distance <= wall and distance!=0:
+                wall=distance
+                position=angle
     count +=1
-
+    cm=int((wall)/10)
+    print("wall ",cm)
+    distance_correcter= int(cm/255)
+    print("angle ",position)
     if count==5:
+## print statments to see size of obsticals relitive to pixil size
         print('sending:')
         print(left)
         print(right)
-        if left >= 3:
-            print("Left")
-            sendl=1
+## remove chance of seeing non existant obsticals with a band to filter out points that were not overriden
+        if left >= 3:# 3 was found efective at removing errors without missing obsticals
+            print("Left")# print that it is avoiding an obstical
+            send[0]=1
+## remove chance of seeing non existant obsticals with a band to filter out points that were not overriden
         if right >= 3:
-            print("Right")
-            sendr=1
+            print("Right")# print that it is avoiding an obstical
+            send[1]=1
         print("------------------")
-        writeNumber(sendl,sendr)
+        send[2]=cm
+        send[3]=position-255
+        writeNumber(send)
         count=0
-        left=0
-        right=0
         
         
         
-                
-    pygame.display.update()
-
-
-def pic():
-    location = '/home/nllane/screen.jpg'
-    #Camera initialization and capturing an image
-    camera = PiCamera(resolution=(640,360), framerate=30)
-    camera.capture(location)
-    img = cv.imread(location)
-    camera.close()
-    cv.imshow('image', img)
-    cv.waitKey(0)
-    cv.destroyAllWindows()
-    return img
-        
+## updates image on the screen            
+    ##pygame.display.update()
+ 
 #sets up a funtion that can read the arduino. used for debugging
 scan_data = [0]*360
 
@@ -127,7 +121,8 @@ try:
         for (_, angle, distance) in scan:
             scan_data[min([359, floor(angle)])] = distance
         process_data(scan_data)
-except KeyboardInterrupt:
+except KeyboardInterrupt: ## stop command from computer
     print('Stoping.')
-lidar.stop()
-lidar.disconnect()
+    lidar.stop()
+    lidar.stop_motor()
+    lidar.disconnect()

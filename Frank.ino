@@ -54,6 +54,7 @@ volatile unsigned int EncoderCountB = 0;
 #define deadband_A 100
 #define deadband_B 100
 #define interruptPin 18
+#define errorPin 19
 //////////////////////////////////////////////////////////
 void indexEncoderCountA()
 {//encoders for motor A
@@ -119,12 +120,30 @@ void Estop() {
   digitalWrite(brush, LOW);
   Serial.print("Estop Activated ");
   while(digitalRead(button) == HIGH); //delay till reset
+  delay(1000);
   Serial.print("restarted ");
   digitalWrite(brush, HIGH);
   digitalWrite(vacuum, HIGH); //turn vacuum on
 }
 
 //////////////////////////////////////////////////////////
+void error() {
+  delay(25);
+  run_motor(A, 0);//set motors to not run
+  run_motor(B, 0);
+  digitalWrite(Green, HIGH);// output the alert
+  digitalWrite(vacuum, LOW);// turn off vacuum
+  digitalWrite(brush, LOW);
+  Serial.print("error");
+  //while(digitalRead(errorPin) == HIGH);
+  while(digitalRead(button) == HIGH); //delay till reset
+  digitalWrite(Green, LOW);
+  digitalWrite(brush, HIGH);
+  digitalWrite(vacuum, HIGH); //turn vacuum on
+}
+
+//////////////////////////////////////////////////////////
+
 void receiveData(int byteCount) {
   //Receive position from pi
 while (Wire.available()) {
@@ -135,10 +154,13 @@ while (Wire.available()) {
     dist = Wire.read()+255*correction;//readjusts because of byte size bit size
     angle=Wire.read()+255; //adjusts angle to fit bit size
     }}
-//////////////////////////////////////////////////////////
 
 //////////////////////////////////////////////////////////
 void setup() {
+pinMode(button, INPUT_PULLUP);
+  // setup collection pins
+  pinMode(vacuum, OUTPUT);
+  pinMode(brush, OUTPUT);
   pinMode(Blue, OUTPUT); 
   pinMode(Green, OUTPUT);
   pinMode(Red, OUTPUT);
@@ -148,10 +170,6 @@ void setup() {
   digitalWrite(Green, 0);
   digitalWrite(Red, 0);
   digitalWrite(Yellow, 0);
-  pinMode(button, INPUT_PULLUP);
-  // setup collection pins
-  pinMode(vacuum, OUTPUT);
-  pinMode(brush, OUTPUT);
   motor_setup();
   // setup serial printing
   Serial.begin(9600);
@@ -175,6 +193,8 @@ void setup() {
   pinMode(MotorBEncoder, INPUT_PULLUP);
   attachPCINT(digitalPinToPCINT(MotorBEncoder), indexEncoderCountB, CHANGE);
   //Estop interrupt
+// pinMode(errorPin, INPUT_PULLUP);
+//  attachInterrupt(digitalPinToInterrupt(errorPin), error, LOW);
   pinMode(interruptPin, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(interruptPin), Estop, LOW);
 }
@@ -187,7 +207,7 @@ void loop() {
 
     run_motor(A, 100); //turn right
     run_motor(B, -100);
-    delay(20);}
+    delay(100);}
     
     //turn 
 //large distance off the wall
@@ -200,17 +220,17 @@ void loop() {
     delay(20);}
     run_motor(A, 255);//go forward
     run_motor(B, 255);
-delay(100);
+delay(80);
   } 
   else if(angle>280){
     Serial.print("too angled \n");
     
     run_motor(A, 100);//turn right
     run_motor(B, -100);
-    delay(10);
+    delay(50);
     run_motor(A, 0); //wait to reduce over shoot
     run_motor(B, 0);
-    delay(10);
+    delay(50);
     }
   else if((distdesired<=dist&&dist<=(distdesired+5))||((dist<=distdesired+5)&&(angle<280&&angle>275))){
     Serial.print("straight \n");
@@ -259,14 +279,115 @@ delay(100);
     run_motor(B, 0);
     //delays till reset
     while(digitalRead(button) == HIGH);
-    delay(200);}
+    delay(1000);}
+//check status every second    
+   count++;
+   if (count==10){
+      checkSensers();
+      count=0;
+      }
+    
 // prints to debug
 //    Serial.print(angle);
 //    Serial.print("\n");
 //    lastdist=dist;
 //    Serial.print(dist);
 //    Serial.print("\n");
-//    Serial.print("\n");
 //    Serial.print("next");
 //    Serial.print("\n");
   }
+   void checkSensers(){
+float AvgAcs=0,AcsValue=0.0,Samples=0.0,vacCurrent=0.0,brushCurrent=0.0,Volt=0.0,vacuumVolt=0.0,RCurrent=0.0,LCurrent=0.0,AcsValueF=0.0;
+Serial.print("Check");
+delay(2000);
+
+// brush A5
+run_motor(A, 100);
+run_motor(B, 100);
+  for (int x = 0; x < 10; x++){ //Get 150 samples
+  AcsValue = analogRead(A5);     //Read current sensor values   
+  Samples = Samples + AcsValue;  //Add samples together
+  delay (3); // let ADC settle before next sample 3ms
+}
+AvgAcs=Samples/10.0;//Taking Average of Samples
+brushCurrent = (2.5 - (AvgAcs * (5.0 / 1024.0)) )/0.070;
+Samples=0.0;
+//vac current A3
+for (int x = 0; x < 10; x++){ 
+  AcsValue = analogRead(A3);     
+  Samples = Samples + AcsValue; 
+  delay (3); 
+}
+AvgAcs=Samples/10.0;//Taking Average of Samples
+vacCurrent = (2.5 - (AvgAcs * (5.0 / 1024.0)) )/0.070;
+Samples=0.0;
+//L current A2
+for (int x = 0; x < 10; x++){ 
+  AcsValue = analogRead(A2);   
+  Samples = Samples + AcsValue;  
+  delay (3); 
+}
+AvgAcs=Samples/10.0;
+LCurrent= (2.5 - (AvgAcs * (5.0 / 1024.0)) )/0.070;
+Samples=0.0;
+
+//R current A1
+for (int x = 0; x < 10; x++){ //Get 150 samples
+  AcsValue = analogRead(A1);     //Read current sensor values   
+  Samples = Samples + AcsValue;  //Add samples together
+  delay (3); // let ADC settle before next sample 3ms
+}
+AvgAcs=Samples/10.0;//Taking Average of Samples
+RCurrent= (2.5 - (AvgAcs * (5.0 / 1024.0)) )/0.070;
+Samples=0.0;
+// Original 0.066
+vacuumVolt = analogRead(A4)*(5/1023)*5.1;
+Volt= analogRead(A6)*(5/1023)*5.1;
+if (brushCurrent >2.9){
+  Serial.print("brush Stall");
+    digitalWrite(Blue, HIGH);
+    stop();
+    digitalWrite(Blue, LOW);}
+    
+if (RCurrent>6||LCurrent>6){
+  Serial.print("Movment Stall");
+    digitalWrite(Red, HIGH);
+    stop();
+    digitalWrite(Red, LOW);}
+
+if (vacCurrent>24){
+  Serial.print("Vacuum Stall");
+    digitalWrite(Green, HIGH);
+    stop();
+    digitalWrite(Green, LOW);}
+if (vacuumVolt<16.2||Volt<16.2){
+  digitalWrite(Yellow, HIGH);
+    stop();
+    digitalWrite(Yellow, LOW);}
+
+   Serial.println(vacCurrent);
+   Serial.print("\n");
+    Serial.print("\n");
+   Serial.println(RCurrent);
+   Serial.print("\n");
+    Serial.print("\n");
+   Serial.println(LCurrent);
+   Serial.print("\n");
+    Serial.print("\n");
+   Serial.println(brushCurrent); 
+   Serial.print("\n");
+    Serial.print("\n");
+   Serial.println(brushCurrent); 
+  digitalWrite(brush, HIGH);
+  digitalWrite(vacuum, HIGH);
+}
+void stop(){
+  
+    digitalWrite(brush, LOW);
+    digitalWrite(vacuum, LOW);
+    run_motor(A, 0);
+    run_motor(B, 0);
+    while(digitalRead(button) == HIGH);
+    digitalWrite(brush, HIGH);
+    digitalWrite(vacuum, HIGH);}
+  

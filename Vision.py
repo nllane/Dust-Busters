@@ -6,12 +6,16 @@ import numpy as np
 import time
 from time import sleep
 import smbus
+import RPi.GPIO as GPIO
 
 # Lidar
 from math import cos, sin, pi, floor
 import os
 ##from adafruit_rplidar import RPLidar
 from rplidar import RPLidar
+## spare wire to tell the Arduino that the code stopped
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(40,GPIO.OUT,initial=GPIO.HIGH)
 
 ## i2c communication setup
 address = 0x09
@@ -23,7 +27,7 @@ time.sleep(0.1)
 PORT_NAME = '/dev/ttyUSB0'
 lidar = RPLidar(PORT_NAME)
 ##print('test') ## Used to debug where errors occurred
-lidar.clean_input
+lidar.clean_input()
 ## This makes sure there are no unexpected values already in the lidar
 
 # set global variables
@@ -106,9 +110,12 @@ try:
             scan_data[min([359, floor(angle)])] = distance
         process_data(scan_data)
 ## runs the processing code
-except KeyboardInterrupt:
-## stop command from computer
+except: ## stop command from computer
     print('Stoping.')
+ ##signal that an error ocurred by setting a pin high
+##    GPIO.output(40,GPIO.LOW)
     lidar.stop()
     lidar.stop_motor()
     lidar.disconnect()
+    time.sleep(2)
+ ##   GPIO.output(40,GPIO.HIGH)

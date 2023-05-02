@@ -1,3 +1,12 @@
+/*
+This code is to be run with the Vision_Closest.py 
+This code adjusts to angle in to the wall at a set angle to reduce overshoot
+This code also adjusts when you are in the proper distance to line up parallel to the wall.
+The Estop and error interups are not reliable but workable.
+I belive that the cause of the reliablity issue is the I2C communication interfering with the pin but did not figure out a fix.
+Sensing needs to have the values tested for fine tuning
+This strugles some with aligning with obsticals and doorways
+*/
 // Librarys
 #include "PinChangeInterrupt.h"
 #include <Wire.h>
@@ -112,6 +121,7 @@ void motor_setup() {
 //////////////////////////////////////////////////////////
 //stop the robot
 void Estop() {
+  //The Estop was being triggered by
   delay(25);
   run_motor(A, 0);//set motors to not run
   run_motor(B, 0);

@@ -2,10 +2,10 @@
 This code is to be run with the Vision_Closest.py 
 This code adjusts to angle in to the wall at a set angle to reduce overshoot
 This code also adjusts when you are in the proper distance to line up parallel to the wall.
-The Estop and error interups are not reliable but workable.
-I belive that the cause of the reliablity issue is the I2C communication interfering with the pin but did not figure out a fix.
+The Estop and error interrupts are not reliable but workable.
+I believe that the cause of the reliability issue is the I2C communication interfering with the pin but did not figure out a fix.
 Sensing needs to have the values tested for fine tuning
-This strugles some with aligning with obsticals and doorways
+This struggles some with aligning with obstacles and doorways
 */
 // Librarys
 #include "PinChangeInterrupt.h"
@@ -24,6 +24,8 @@ This strugles some with aligning with obsticals and doorways
 #define MotorBEncoder 11
 //initialize values
 #define distTolerance 3
+  //change distdesired to change position off of wall
+  int distdesired=50;
   int left=0;
   int right=0;
   int dist=0;
@@ -32,7 +34,6 @@ This strugles some with aligning with obsticals and doorways
   int high=0;
   int count=0;
   int low=0;
-  int distdesired=50;
   int correction=0;
   int test=0;
 //Encoder count setup
@@ -121,7 +122,9 @@ void motor_setup() {
 //////////////////////////////////////////////////////////
 //stop the robot
 void Estop() {
-  //The Estop was being triggered by
+  //The Estop was being interfered with by the I2C communication.
+  //when run without the I2C sending It worked consistently.
+  
   delay(25);
   run_motor(A, 0);//set motors to not run
   run_motor(B, 0);
@@ -138,6 +141,8 @@ void Estop() {
 
 //////////////////////////////////////////////////////////
 void error() {
+  //the raspberry pi sends 3.3V and the arduino is a 5V system so this was un reliable
+  //it could work when the motors were disconected
   delay(25);
   run_motor(A, 0);//set motors to not run
   run_motor(B, 0);
@@ -158,7 +163,7 @@ void receiveData(int byteCount) {
   //Receive position from pi
 while (Wire.available()) {
     // read five values for positioning
-    correction = Wire.read();
+    correction = Wire.read();// 255 is the highest and the distance can be larger than that
     right = Wire.read();
     left = Wire.read();
     dist = Wire.read()+255*correction;//readjusts because of byte size bit size
@@ -193,7 +198,7 @@ pinMode(button, INPUT_PULLUP);
   while(digitalRead(button) == HIGH);
   Serial.print("Start ");
   digitalWrite(vacuum, HIGH);
-  digitalWrite(brush, HIGH);//stet high when new motors
+  digitalWrite(brush, HIGH);// turns on the vacuum
 
 
   //Setup the PinChange Interrupts
@@ -203,14 +208,17 @@ pinMode(button, INPUT_PULLUP);
   pinMode(MotorBEncoder, INPUT_PULLUP);
   attachPCINT(digitalPinToPCINT(MotorBEncoder), indexEncoderCountB, CHANGE);
   //Estop interrupt
+    // these are commented out because they were unreliable
+    // If the code stays in an interupt then the I2C communication fails and then the python code hits an error
 // pinMode(errorPin, INPUT_PULLUP);
 //  attachInterrupt(digitalPinToInterrupt(errorPin), error, LOW);
-  pinMode(interruptPin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(interruptPin), Estop, LOW);
+//  pinMode(interruptPin, INPUT_PULLUP);
+//  attachInterrupt(digitalPinToInterrupt(interruptPin), Estop, LOW);
 }
 
 void loop() {
   //uses the values provided by lidar to adjust movement
+  // timing set to 100 to adjust close to I2C communication, reduced values is more reliable
   //both left side or right blocked and to close to a wall
   if(left== 1 ||(right==1&&dist<100) ){  
     Serial.print("large turn \n");
@@ -243,6 +251,7 @@ delay(80);
     delay(50);
     }
   else if((distdesired<=dist&&dist<=(distdesired+5))||((dist<=distdesired+5)&&(angle<280&&angle>275))){
+    // activates if in the set distance or close to the wall and at a poor angle
     Serial.print("straight \n");
     while (angle >273){ 
       if (dist>70){//to avoid infinite loop
@@ -290,7 +299,7 @@ delay(80);
     //delays till reset
     while(digitalRead(button) == HIGH);
     delay(1000);}
-//check status every second    
+//check status every second if delays are changed change this   
    count++;
    if (count==10){
       checkSensers();
@@ -309,95 +318,106 @@ delay(80);
    void checkSensers(){
 float AvgAcs=0,AcsValue=0.0,Samples=0.0,vacCurrent=0.0,brushCurrent=0.0,Volt=0.0,vacuumVolt=0.0,RCurrent=0.0,LCurrent=0.0,AcsValueF=0.0;
 Serial.print("Check");
-delay(2000);
-
+//delay(2000);//line for debugging
+//runs through the all sensors avraging 10 samples per each 
 // brush A5
-run_motor(A, 100);
-run_motor(B, 100);
-  for (int x = 0; x < 10; x++){ //Get 150 samples
+
+run_motor(A, 0);
+run_motor(B, 0);
+  for (int x = 0; x < 10; x++){ //Get 10 samples
   AcsValue = analogRead(A5);     //Read current sensor values   
   Samples = Samples + AcsValue;  //Add samples together
   delay (3); // let ADC settle before next sample 3ms
 }
-AvgAcs=Samples/10.0;//Taking Average of Samples
-brushCurrent = (2.5 - (AvgAcs * (5.0 / 1024.0)) )/0.070;
+  AvgAcs=Samples/10.0;//Taking Average of Samples
+  brushCurrent = (2.5 - (AvgAcs * (5.0 / 1024.0)) )/0.070; //calculation to adjust for bit size and the senors values
 Samples=0.0;
+     
 //vac current A3
 for (int x = 0; x < 10; x++){ 
   AcsValue = analogRead(A3);     
   Samples = Samples + AcsValue; 
   delay (3); 
 }
-AvgAcs=Samples/10.0;//Taking Average of Samples
-vacCurrent = (2.5 - (AvgAcs * (5.0 / 1024.0)) )/0.070;
+  AvgAcs=Samples/10.0;//Taking Average of Samples
+  vacCurrent = (2.5 - (AvgAcs * (5.0 / 1024.0)) )/0.070;  //calculation to adjust for bit size and the senors values
 Samples=0.0;
+     
 //L current A2
+//the motors need to be running to check the current
+run_motor(A, 100);
+run_motor(B, 100);
 for (int x = 0; x < 10; x++){ 
   AcsValue = analogRead(A2);   
   Samples = Samples + AcsValue;  
   delay (3); 
 }
-AvgAcs=Samples/10.0;
-LCurrent= (2.5 - (AvgAcs * (5.0 / 1024.0)) )/0.070;
+  AvgAcs=Samples/10.0;
+  LCurrent= (2.5 - (AvgAcs * (5.0 / 1024.0)) )/0.070; //calculation to adjust for bit size and the senors values
 Samples=0.0;
 
 //R current A1
-for (int x = 0; x < 10; x++){ //Get 150 samples
+for (int x = 0; x < 10; x++){ //Get 10 samples
   AcsValue = analogRead(A1);     //Read current sensor values   
   Samples = Samples + AcsValue;  //Add samples together
   delay (3); // let ADC settle before next sample 3ms
 }
-AvgAcs=Samples/10.0;//Taking Average of Samples
-RCurrent= (2.5 - (AvgAcs * (5.0 / 1024.0)) )/0.070;
+  AvgAcs=Samples/10.0;//Taking Average of Samples
+  RCurrent= (2.5 - (AvgAcs * (5.0 / 1024.0)) )/0.070; //calculation to adjust for bit size and the senors values
+run_motor(A, 0);
+run_motor(B, 0);
+//stop motors to avoid to much change between scans
 Samples=0.0;
 // Original 0.066
-vacuumVolt = analogRead(A4)*(5/1023)*5.1;
-Volt= analogRead(A6)*(5/1023)*5.1;
-if (brushCurrent >2.9){
+
+vacuumVolt = analogRead(A4)*(5/1023)*5.1;// bit correction for voltage sensors
+Volt= analogRead(A6)*(5/1023)*5.1;// bit correction for voltage sensors
+
+//checks the values aquired to the stall currents
+//the values should be tested and changed acordingly we have repaced thing sense this was added
+if (brushCurrent >2.9){ //3 is the stall current
   Serial.print("brush Stall");
-    digitalWrite(Blue, HIGH);
-    stop();
-    digitalWrite(Blue, LOW);}
+    digitalWrite(Blue, HIGH); //turn on light
+    stop(); //wait in a funtion till the issue is resolved
+    digitalWrite(Blue, LOW);}//turn off light
     
-if (RCurrent>6||LCurrent>6){
+if (RCurrent>6||LCurrent>6){//stall current was calculated to 8
   Serial.print("Movment Stall");
-    digitalWrite(Red, HIGH);
+    digitalWrite(Red, HIGH);//turn on light
     stop();
     digitalWrite(Red, LOW);}
 
-if (vacCurrent>24){
+if (vacCurrent>24){   //stall current was calculated to 24
   Serial.print("Vacuum Stall");
     digitalWrite(Green, HIGH);
     stop();
     digitalWrite(Green, LOW);}
-if (vacuumVolt<16.2||Volt<16.2){
+if (vacuumVolt<16.2||Volt<16.2){ // batteries hit one bar of charge at this voltage
   digitalWrite(Yellow, HIGH);
     stop();
     digitalWrite(Yellow, LOW);}
 
-   Serial.println(vacCurrent);
-   Serial.print("\n");
-    Serial.print("\n");
-   Serial.println(RCurrent);
-   Serial.print("\n");
-    Serial.print("\n");
-   Serial.println(LCurrent);
-   Serial.print("\n");
-    Serial.print("\n");
-   Serial.println(brushCurrent); 
-   Serial.print("\n");
-    Serial.print("\n");
-   Serial.println(brushCurrent); 
-  digitalWrite(brush, HIGH);
-  digitalWrite(vacuum, HIGH);
+//   Serial.println(vacCurrent);
+//   Serial.print("\n");
+//   Serial.print("\n");
+//   Serial.println(RCurrent);
+//   Serial.print("\n");
+//   Serial.print("\n");
+//   Serial.println(LCurrent);
+//   Serial.print("\n");
+//   Serial.print("\n");
+//   Serial.println(brushCurrent); 
+//   Serial.print("\n");
+//   Serial.print("\n");
+//   Serial.println(brushCurrent); 
 }
 void stop(){
-  
+    //this is called is a sensor is set high could be used with estop to make it easyer to reset
     digitalWrite(brush, LOW);
-    digitalWrite(vacuum, LOW);
+    digitalWrite(vacuum, LOW);// stops the vacuum and brush
     run_motor(A, 0);
-    run_motor(B, 0);
-    while(digitalRead(button) == HIGH);
+    run_motor(B, 0); //don't move
+    while(digitalRead(button) == HIGH); //start with a new button press
     digitalWrite(brush, HIGH);
-    digitalWrite(vacuum, HIGH);}
+    digitalWrite(vacuum, HIGH);}//restarts the systems
   

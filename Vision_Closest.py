@@ -32,6 +32,9 @@ time.sleep(0.1)
 PORT_NAME = '/dev/ttyUSB0'
 lidar = RPLidar(PORT_NAME)
 ##print('test') ## Used to debug where errors occurred
+lidar.clean_input()
+## This makes sure there are no unexpected values already in the lidar
+
 # set global variables
 max_distance = 0
 count=0
@@ -61,12 +64,12 @@ def process_data(data):
 ## ignore unwanted points to reduce processing power
         if angle > 30 and angle < 270 :## 120 degrees viewed
             continue
-## checks the Right side for obstacles within 30 degree angles at up to 80 cm
-        if (angle > 330 and distance < 800 and distance > 0):
-            right+=1
 ## checks the left side for obstacles within 30 degree angles at up to 80 cm
-        if (angle < 30 and distance < 800 and distance > 0):
+        if (angle > 330 and distance < 800 and distance > 0):
             left+=1
+## checks the right side for obstacles within 30 degree angles at up to 80 cm
+        if (angle < 30 and distance < 800 and distance > 0):
+            right+=1
 ## checks the left side of the robot for the closest point
         if angle >= 270 and angle <=330:
             if distance <= wall and distance!=0:

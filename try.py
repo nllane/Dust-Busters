@@ -1,0 +1,122 @@
+ ##library
+import math
+import numpy as np
+import time
+from time import sleep
+import smbus
+import RPi.GPIO as GPIO
+print('I start on boot')
+# Lidar
+from math import cos, sin, pi, floor
+import os
+##from adafruit_rplidar import RPLidar
+from rplidar import RPLidar
+## spare wire to tell the Arduino that the code stopped
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(40,GPIO.OUT,initial=GPIO.HIGH)
+
+## i2c communication setup
+address = 0x09
+bus = smbus.SMBus(1)
+time.sleep(0.1)
+
+
+# Setup the RPLidar
+PORT_NAME = '/dev/ttyUSB0'
+lidar = RPLidar(PORT_NAME)
+##print('test') ## Used to debug where errors occurred
+lidar.clean_input()
+## This makes sure there are no unexpected values already in the lidar
+
+# set global variables
+max_distance = 0
+count=0
+
+## funtion to send the aquired vaules
+def write_number(send):
+    ## send the values to the arduino using i2c pins
+    print(send)## View what is sent for debugging
+    bus.write_i2c_block_data(address, distance_corrector, send)
+
+## function to calculate data
+def process_data(data):
+    ## global variables
+    global max_distance
+    global count
+    global distance_corrector
+## setup local variables and resets them
+    right=0
+    left=0
+    point=0
+    position=270
+    wall = 10000## set to large value because it looks for the closest point
+    cm=0
+    send=[0,0,0,0]
+ ## reviews all angle measurements acquired
+    for angle in range(360):
+        distance = data[angle]
+## ignore unwanted points to reduce processing power
+        if angle > 30 and angle < 270 :## 120 degrees viewed
+            continue
+## checks the Right side for obstacles within 30 degree angles at up to 80 cm
+        if (angle > 340 and distance < 900 and distance > 0):
+            left+=1
+## checks the left side for obstacles within 30 degree angles at up to 80 cm
+        if (angle < 30 and distance < 900 and distance > 0):
+            right+=1
+## checks the left side of the robot for the closest point
+        if angle == 270:
+            point=distance
+        if angle >= 270 and angle <=330:
+            if distance <= wall and distance!=0:
+## adjust angle and distance sent based on shortest distance
+                wall=distance
+                position=angle
+    count +=1
+## adjusts the value to be in cms
+    cm=int((point)/10)
+    print("wall ",cm)
+## Creates a value to adjust for bit size
+    distance_corrector= int(cm/255)
+    print("angle ",position)
+##Sends the values every 5 scans to reduce delays to the LiDAR
+    if count==5:
+## print statements to see size of obstacles relative to pixel size
+        print('sending:')
+        print(left)
+        print(right)
+## remove chance of seeing nonexistent obstacles by filtering out points that were not overridden
+        if left >= 3:# 3 was found effective at removing errors without missing obstacles
+            print("Left")# print that it is avoiding an obstacle
+            send[0]=1
+## remove chance of seeing nonexistent obstacles by filtering out points that were not overridden
+        if right >= 3:
+            print("Right")# print that it is avoiding an obstacle
+            send[1]=1
+        print("------------------")
+## Adds the other values to the send matrix
+        send[2]=cm
+        send[3]=position-255 ##adjusted to allow for one byte send limit
+        write_number(send)
+        count=0
+        
+ 
+scan_data = [0]*360
+
+## LiDAR code found online
+try:
+    for scan in lidar.iter_scans():
+## runs through the scans as they are created
+        for (_, angle, distance) in scan:
+            scan_data[min([359, floor(angle)])] = distance
+        process_data(scan_data)
+## runs the processing code
+except KeyboardInterrupt: ## stop command from computer
+    print('Stoping.')
+ ##signal that an error ocurred by setting a pin high
+    GPIO.output(40,GPIO.HIGH)
+    lidar.stop()
+    lidar.stop_motor()
+    lidar.disconnect()
+    time.sleep(2)
+    GPIO.output(40,GPIO.LOW)

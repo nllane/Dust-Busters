@@ -1,3 +1,13 @@
+/*
+This code is to be run with the Vision_Future.py 
+This code uses the distance provided at 90 degrees by the lidar and the closest angle to follow the walls.
+The Estop and error interrupts are not reliable but workable.
+I believe that the cause of the reliability issue is the I2C communication interfering with the pin but did not figure out a fix.
+Sensing needs to have the values tested for fine tuning
+because it requires the motor to be running for only 2 of the sensors it means that it only needs to move forward for around .06 seconds without vision.
+This code is untested but it is the combination of the other two codes to eliminate there biggest failures
+*/
+
 // Librarys
 #include "PinChangeInterrupt.h"
 #include <Wire.h>
@@ -224,20 +234,33 @@ pinMode(button, INPUT_PULLUP);
 void loop() {
   //uses the values provided by lidar to adjust movement
   //both left side or right blocked and to close to a wall
+  
   if (left== 1 ||(right==1&&dist<100) ){  
     Serial.print("large turn \n");
 
     run_motor(A, 100); //turn right
     run_motor(B, -100);
-    delay(20);}
+    delay(10);}
     
     //turn 
 //large distance off the wall
- 
+  else if(angle>280){
+    Serial.print("too angled \n");
+    
+    run_motor(A, 100);//turn right
+    run_motor(B, -100);
+    delay(20);
+    }
     
   else if((distdesired<=dist&&dist<=(distdesired+5))){
+  // activates if in the set distance
     Serial.print("straight \n");
-
+    while (angle >273){ 
+    if (dist>70){//to avoid infinite loop
+      break;}
+    run_motor(A, 100); //turn right
+    run_motor(B, -100);
+    delay(10);}
     // go straight
     run_motor(A, 255);
     run_motor(B, 255);
@@ -248,32 +271,35 @@ void loop() {
     Serial.print("Correct right\n");
     run_motor(A, 255);
     run_motor(B, 0); //none pinpoint turn
-    delay(100);
+    delay(20);
     // go forward to make a less drastic turn
     run_motor(A, 255);
     run_motor(B, 255);
-    delay(250);
+    delay(50);
     //go forward
   }
-  else if(dist>(distdesired+100)){  
-    Serial.print("Correct left\n");
-   run_motor(A, -255);
-    run_motor(B, 255); //none pinpoint turn
-    delay(100);
-    // go forward 
-
-    }
+else if(dist>(distdesired+40)){
+    Serial.print("return to wall\n");
+    
+    while (angle <280){ 
+    run_motor(A, -100);//turn left
+    run_motor(B, 100);//turn left
+    delay(20);}
+    run_motor(A, 255);//go forward
+    run_motor(B, 255);
+delay(80);
+  } 
   
 //small distance away from wall
   else if(dist>(distdesired+5)){  
     Serial.print("Correct left\n");
    run_motor(A, 0);
     run_motor(B, 255); //none pinpoint turn
-    delay(100);
+    delay(20);
     // go forward 
     run_motor(A, 255);
     run_motor(B, 255);
-    delay(250);
+    delay(50);
     }
     //go forward
     
@@ -289,7 +315,7 @@ void loop() {
 //check status every second gets quick readings    
    count++;
    if (count==10){
-      //checkSensers();
+      checkSensers();
       count=0;
       }
     
@@ -407,4 +433,3 @@ void stop(){
     while(digitalRead(button) == HIGH); //start with a new button press
     digitalWrite(brush, HIGH);
     digitalWrite(vacuum, HIGH);}//restarts the systems
-  

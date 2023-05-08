@@ -1,8 +1,8 @@
 #!/usr/bin/pyton3
 '''
-This is the code for Basic wall following it will only look for obsticals and at a 90 degree angle left of the robot.
+This is the code for Basic wall following it will only look for obstacles and at a 90 degree angle left of the robot.
 The code also has an attempt to signal the Arduino when the python code stops.
-This code has no ablity correcting based on the angle to the wall.
+This code has no ability correcting based on the angle to the wall.
 '''
 
 ##library

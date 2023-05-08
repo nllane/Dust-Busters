@@ -1,3 +1,15 @@
+/*
+This code is to be run with the Vision_Main.py 
+This is the code run at the showcase and loaded on the Arduino upon delivery.
+This code uses only the distance provided by the lidar to fallow the walls.
+The Estop and error interrupts are not reliable but workable.
+I believe that the cause of the reliability issue is the I2C communication interfering with the pin but did not figure out a fix.
+Sensing needs to have the values tested for fine tuning
+Sensing was turned off for the show case because it requires the motor to be running which meant that it goes forward for around .12 seconds without vision. I believe this can be optimized more efficiently
+This code arks its wall following and struggles with hollow objects.
+*/
+
+
 // Librarys
 #include "PinChangeInterrupt.h"
 #include <Wire.h>
